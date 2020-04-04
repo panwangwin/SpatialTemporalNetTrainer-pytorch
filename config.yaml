@@ -1,0 +1,23 @@
+dir:
+  base_dir:
+  save_dir:
+  log_dir:
+
+train:
+  batch_size: 64
+  learning_rate: 0.01
+  epochs: 100
+
+models:
+  model_name:
+
+data:
+  data_dir: ./metr-la.h5
+  adj_mx_dir: ./adj_mx_la.h5
+  train_ratio: 0.8
+  test_ratio: 0.1
+  val_ratio: 0.1
+  seq_len: 12
+  horizon: 12
+
+
