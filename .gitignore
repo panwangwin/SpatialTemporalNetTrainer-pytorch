@@ -1,0 +1,5 @@
+#pycharm
+.idea/
+#
+*.h5
+*.npz

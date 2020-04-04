@@ -30,7 +30,7 @@ class DataLoader():
         assert (self.train_ratio+self.val_ratio+self.test_ratio==1)
 
     def data_process(self,add_time_in_day=True):
-    if add_time_in_day:
+    if add_time_in_day
 
     def generate_graph_seq2seq_io_data(self,
             df, add_time_in_day=True, add_day_in_week=False, scaler=None
