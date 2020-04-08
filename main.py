@@ -162,6 +162,17 @@ def main(args):
     data_args=args['data']
     model_args=args['model']
     train_args=args['train']
+    loader=DataLoader(data_args)
+    handler=Process_Handler(loader,dir_args,model_args,train_args)
+    max_val=1000
+    val_mae=1000
+    for _ in range(train_args['epochs']):
+        handler.train()
+        val_mae=handler.val()
+        if val_mae<max_val:
+            handler.save()
+    handler.load()
+    test_table=handler.test()
     pass
 
 
