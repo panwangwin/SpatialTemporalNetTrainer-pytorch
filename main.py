@@ -26,7 +26,7 @@ class DataLoader():
         df_length=len(df)
         adj_mx_dir=args['adj_mx_dir']
         with open(adj_mx_dir,'rb') as f:
-            self.adj_mx=pickle.load(f)[2]
+            self.adj_mx=pickle.load(f,encoding='latin1')[2]
         train_ratio=args['train_ratio']
         test_ratio=args['test_ratio']
         val_ratio=args['val_ratio']
@@ -34,9 +34,9 @@ class DataLoader():
         self.horizon=args['horizon']
         assert (train_ratio+val_ratio+test_ratio==1)
 
-        df_set={'train':df[:train_ratio*df_length],
-                'val':df[train_ratio*df_length:(train_ratio+val_ratio)*df_length],
-                'test':df[-test_ratio*df_length:]}
+        df_set={'train':df[:int(train_ratio*df_length)],
+                'val':df[int(train_ratio*df_length):int((train_ratio+val_ratio)*df_length)],
+                'test':df[-int(test_ratio*df_length):]}
 
         #Construct Graph
         graph = self.mat_to_nx(self.adj_mx)
@@ -52,7 +52,8 @@ class DataLoader():
         self.data = {}
         for each in df_set:
             xy={}
-            xy['x'],xy['y']=self.construct_x_y(each)
+            xy['x'],xy['y']=self.construct_x_y(df_set[each])
+            xy['y']=xy['y'][...,[0]]
             self.data[each]=xy
         self.stage=None
 
@@ -93,8 +94,8 @@ class DataLoader():
             day_in_week[np.arange(num_samples), :, df.index.dayofweek] = 1
             data_list.append(day_in_week)
 
-        x_offsets=np.arange(-self.seq_len,1)
-        y_offsets=np.arange(1,self.horizon)
+        x_offsets=np.arange(-self.seq_len+1,1)
+        y_offsets=np.arange(1,self.horizon+1)
         data = np.concatenate(data_list, axis=-1)
         # epoch_len = num_samples + min(x_offsets) - max(y_offsets)
         x, y = [], []
