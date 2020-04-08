@@ -13,44 +13,77 @@ import torch.nn.functional as fn
 import torch.optim as optim
 import argparse
 import yaml
+import networkx as nx
+import sys
+import scipy
 
 
 class DataLoader():
     def __init__(self,args):
+        #initialization
         data_dir=args['data_dir']
-        self.data=pd.read_hdf(data_dir)
+        df=pd.read_hdf(data_dir)
+        df_length=len(df)
         adj_mx_dir=args['adj_mx_dir']
         with open(adj_mx_dir,'rb') as f:
             self.adj_mx=pickle.load(f)[2]
-        self.train_ratio=args['train_ratio']
-        self.test_ratio=args['test_ratio']
-        self.val_ratio=args['val_ratio']
+        train_ratio=args['train_ratio']
+        test_ratio=args['test_ratio']
+        val_ratio=args['val_ratio']
         self.seq_len=args['seq_len']
         self.horizon=args['horizon']
-        assert (self.train_ratio+self.val_ratio+self.test_ratio==1)
+        assert (train_ratio+val_ratio+test_ratio==1)
 
-    def data_process(self,add_time_in_day=True):
-    if add_time_in_day
+        df_set={'train':df[:train_ratio*df_length],
+                'val':df[train_ratio*df_length:(train_ratio+val_ratio)*df_length],
+                'test':df[-test_ratio*df_length:]}
 
-    def generate_graph_seq2seq_io_data(self,
-            df, add_time_in_day=True, add_day_in_week=False, scaler=None
+        #Construct Graph
+        graph = self.mat_to_nx(self.adj_mx)
+        n = graph.number_of_nodes()
+        m = graph.number_of_edges()
+        print('Graph have %d nodes and %d links.\n'
+              'Input sequence length: %d \n'
+              'Forecasting horizon: %d \n'
+               % (
+                  n, m, self.seq_len, self.horizon),
+              file=sys.stderr)
+        self.graph = graph
+        self.data = {}
+        for each in df_set:
+            xy={}
+            xy['x'],xy['y']=self.construct_x_y(each)
+            self.data[each]=xy
+        self.stage=None
+
+
+    @staticmethod
+    def mat_to_nx(adj_mat):
+        g = nx.Graph()
+        g.add_nodes_from(range(adj_mat.shape[0]))
+        coo = scipy.sparse.coo_matrix(adj_mat)
+        for u, v, _ in zip(coo.row, coo.col, coo.data):
+            g.add_edge(u, v)
+        assert g.number_of_nodes() == adj_mat.shape[0]
+        return g
+
+    def construct_x_y(self,
+            df, add_time_in_day=True, add_day_in_week=False
     ):
         """
         Generate samples from
         :param df:
-        :param x_offsets:
-        :param y_offsets:
         :param add_time_in_day:
         :param add_day_in_week:
-        :param scaler:
         :return:
-        # x: (epoch_size, input_length, num_nodes, input_dim)
-        # y: (epoch_size, output_length, num_nodes, output_dim)
+        # x: (epoch_size, seq_len, num_nodes, input_dim)
+        # y: (epoch_size, horizon, num_nodes, output_dim)
         """
 
         num_samples, num_nodes = df.shape
         data = np.expand_dims(df.values, axis=-1)
         data_list = [data]
+
         if add_time_in_day:
             time_ind = (df.index.values - df.index.values.astype("datetime64[D]")) / np.timedelta64(1, "D")
             time_in_day = np.tile(time_ind, [1, num_nodes, 1]).transpose((2, 1, 0))
@@ -60,6 +93,8 @@ class DataLoader():
             day_in_week[np.arange(num_samples), :, df.index.dayofweek] = 1
             data_list.append(day_in_week)
 
+        x_offsets=np.arange(-self.seq_len,1)
+        y_offsets=np.arange(1,self.horizon)
         data = np.concatenate(data_list, axis=-1)
         # epoch_len = num_samples + min(x_offsets) - max(y_offsets)
         x, y = [], []
@@ -76,19 +111,31 @@ class DataLoader():
         return x, y
 
     def set(self,stage):
-        pass
+        self.stage=stage
+        print("Now using %sing set"%(stage))
+        return stage
 
-    def get(self):
+    def get(self,batch_size):
+        self.current_batch=0
+        data=self.data[self.stage]
+        length=len(data)
+        batches=length/batch_size
         def iterator():
-            while 1<1:
-                yield 1
+            while self.current_batch<batches:
+                idx=self.current_batch*self.batch_size
+                yield(data['x'][idx:idx+self.batch_size],data['y'][idx:idx+self.batch_size])
+                self.current_batch=self.current_batch+1
         return iterator()
 
 class MyModel(nn.Module):
     def __init__(self):
         super(MyModel,self).__init__()
 
-    def forward(self,args):
+    def forward(self,x):
+        '''
+        :param x: (batch_size,... other input dimensions)
+        :return: y: (batch_size,... other output dimensions)
+        '''
         pass
 
 class Process_Handler():
