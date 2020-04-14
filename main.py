@@ -18,7 +18,7 @@ def pickle_save(filename,object):
     with open(filename,'wb') as f:
         pickle.dump(object,f)
 
-class MyModel(nn.Module):
+class MyModel(nn.Module): #todo find the essence of the batch
     def __init__(self):
         super(MyModel,self).__init__()
         self.iuput_dim=2
@@ -49,7 +49,7 @@ class Process_Handler():
             self.optimizer=optim.SGD(self.model.parameters(),lr=self.lr)
 
     @staticmethod
-    def set_loss(loss_name):
+    def set_loss(loss_name): #todo loss and optimzer set
         if loss_name=='MSELoss':
             return nn.MSELoss()
         else:
@@ -59,7 +59,7 @@ class Process_Handler():
         self.model.train()
         self.loader.set('train')
         for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
-            x=torch.from_numpy(x).float()
+            x=torch.from_numpy(x).float() #todo prepocessing
             y=torch.from_numpy(y).float()
             pred=self.model(x)
             loss=self.loss_fn(pred,y)
@@ -72,7 +72,6 @@ class Process_Handler():
 
     def test(self):
         self.model.eval()
-
         pass
 
     def save(self,filename):
@@ -92,7 +91,7 @@ def main(args):
     data_args=args['data']
     model_args=args['model']
     train_args=args['train']
-    loader=DataLoader(data_args)
+    loader=DataLoader(data_args) #todo loader set and reset
     handler=Process_Handler(loader,dir_args,model_args,train_args)
     max_val=1000
     val_mae=1000

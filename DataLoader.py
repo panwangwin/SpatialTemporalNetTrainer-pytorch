@@ -10,6 +10,8 @@ import sys
 import scipy
 import numpy as np
 
+#todo scaler
+
 class DataLoader():
     def __init__(self,args):
         #initialization
@@ -48,7 +50,8 @@ class DataLoader():
             xy['y']=xy['y'][...,[0]]
             self.data[each]=xy
         self.stage=None
-
+        self.std=self.data['train'].std()
+        self.mean=self.data['train'].mean()
 
     @staticmethod
     def mat_to_nx(adj_mat):
