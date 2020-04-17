@@ -6,11 +6,9 @@
 import pandas as pd
 import pickle
 import networkx as nx
-import sys
 import scipy
 import numpy as np
 import copy
-#todo inverse scaler
 
 class DataLoader():
     def __init__(self,args):
@@ -63,7 +61,7 @@ class DataLoader():
             scaled_data[each]=temp_dict
         return scaled_data
 
-    def reverse_scale_data(self,data):
+    def inverse_scale_data(self,data):
         data=data*self.std+self.mean
         return data
 

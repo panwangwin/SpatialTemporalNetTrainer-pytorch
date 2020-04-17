@@ -5,6 +5,7 @@
 #
 import pickle
 from DataLoader import DataLoader
+import utils
 import torch
 import torch.autograd
 import torch.nn as nn
@@ -57,6 +58,13 @@ class Process_Handler():
             return nn.MSELoss()
         elif loss_name=='L1Loss':
             return nn.L1Loss()
+        elif loss_name=='masked MSELoss':
+            return utils.masked_mse_torch(null_val=0)
+        elif loss_name=='masked MAELoss':
+            return utils.masked_mae_torch(null_val=0)
+        elif loss_name=='masked RMSELoss':
+            return utils.masked_rmse_torch(null_val=0)
+
         else:
             raise AttributeError('No Such Loss')
 
@@ -67,7 +75,7 @@ class Process_Handler():
             x=torch.from_numpy(x).float() #todo prepocessing
             y=torch.from_numpy(y).float()
             pred=self.model(x)
-            pred=self.loader.reverse_scale_data(pred)
+            pred=self.loader.inverse_scale_data(pred)
             loss=self.loss_fn(pred,y)
             loss.backward()
             self.optimizer.step()
