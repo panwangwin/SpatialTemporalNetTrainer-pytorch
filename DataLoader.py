@@ -129,7 +129,7 @@ class DataLoader():
         length=len(data['x'])
         batches=length/batch_size
         def iterator():
-            while self.current_batch<batches:
+            while self.current_batch<batches-1:
                 idx=self.current_batch*batch_size
                 yield(data['x'][idx:idx+batch_size],data['y'][idx:idx+batch_size])
                 self.current_batch=self.current_batch+1

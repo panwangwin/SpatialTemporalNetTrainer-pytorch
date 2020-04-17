@@ -11,6 +11,8 @@ import torch.autograd
 import torch.nn as nn
 import torch.nn.functional as fn
 import torch.optim as optim
+import numpy as np
+import pandas as pd
 import argparse
 import yaml
 
@@ -64,13 +66,13 @@ class Process_Handler():
             return utils.masked_mae_torch(null_val=0)
         elif loss_name=='masked RMSELoss':
             return utils.masked_rmse_torch(null_val=0)
-
         else:
             raise AttributeError('No Such Loss')
 
     def train(self):
         self.model.train()
         self.loader.set('train')
+        print('Now TRIANING...')
         for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
             x=torch.from_numpy(x).float() #todo prepocessing
             y=torch.from_numpy(y).float()
@@ -79,11 +81,21 @@ class Process_Handler():
             loss=self.loss_fn(pred,y)
             loss.backward()
             self.optimizer.step()
-            print(loss)
+        print('TRINING Finished!')
         pass
 
     def val(self):
-        pass
+        self.model.eval()
+        self.loader.set('val')
+        total_loss=[]
+        for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
+            x=torch.from_numpy(x).float()
+            y=torch.from_numpy(y).float()
+            pred=self.model(x)
+            pred=self.loader.inverse_scale_data(pred)
+            loss=self.loss_fn(pred,y)
+            total_loss.append(loss.detach().numpy())
+        return np.mean(total_loss)
 
     def test(self):
         self.model.eval()
@@ -108,8 +120,7 @@ def main(args):
     train_args=args['train']
     loader=DataLoader(data_args) #todo loader set and reset
     handler=Process_Handler(loader,dir_args,model_args,train_args)
-    max_val=1000
-    val_mae=1000
+    max_val=10
     for _ in range(train_args['epochs']):
         handler.train()
         val_mae=handler.val()
