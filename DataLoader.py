@@ -9,8 +9,8 @@ import networkx as nx
 import sys
 import scipy
 import numpy as np
-
-#todo scaler
+import copy
+#todo inverse scaler
 
 class DataLoader():
     def __init__(self,args):
@@ -39,9 +39,7 @@ class DataLoader():
         print('Graph have %d nodes and %d links.\n'
               'Input sequence length: %d \n'
               'Forecasting horizon: %d \n'
-               % (
-                  n, m, self.seq_len, self.horizon),
-              file=sys.stderr)
+               % (n, m, self.seq_len, self.horizon))
         self.graph = graph
         self.data = {}
         for each in df_set:
@@ -50,8 +48,24 @@ class DataLoader():
             xy['y']=xy['y'][...,[0]]
             self.data[each]=xy
         self.stage=None
-        self.std=self.data['train'].std()
-        self.mean=self.data['train'].mean()
+        self.std=self.data['train']['x'][...,0].std()
+        self.mean=self.data['train']['x'][...,0].mean()
+        self.scaled_data=self.rescale_data()
+
+
+    def rescale_data(self):
+        scaled_data={}
+        for each in self.data:
+            temp_dict={}
+            temp_dict['x']=copy.deepcopy(self.data[each]['x'])
+            temp_dict['x'][...,0]=copy.deepcopy((self.data[each]['x'][...,0]-self.mean)/self.std)
+            temp_dict['y']=copy.deepcopy(self.data[each]['y'])
+            scaled_data[each]=temp_dict
+        return scaled_data
+
+    def reverse_scale_data(self,data):
+        data=data*self.std+self.mean
+        return data
 
     @staticmethod
     def mat_to_nx(adj_mat):
@@ -113,7 +127,7 @@ class DataLoader():
 
     def get(self,batch_size):
         self.current_batch=0
-        data=self.data[self.stage]
+        data=self.scaled_data[self.stage]
         length=len(data['x'])
         batches=length/batch_size
         def iterator():

@@ -14,9 +14,12 @@ import argparse
 import yaml
 
 
+#todo logger module
+
 def pickle_save(filename,object):
     with open(filename,'wb') as f:
         pickle.dump(object,f)
+
 
 class MyModel(nn.Module): #todo find the essence of the batch
     def __init__(self):
@@ -24,16 +27,16 @@ class MyModel(nn.Module): #todo find the essence of the batch
         self.iuput_dim=2
         self.output_dim=1
         self.num_nodes=207
-        self.batch_sz=64
         self.layer1=nn.Linear(self.iuput_dim*self.num_nodes*12,self.num_nodes*12)
     def forward(self,x):
         '''
         :param x: (batch_size,... other input dimensions)
         :return: y: (batch_size,... other output dimensions)
         '''
-        x=x.reshape(self.batch_sz,self.iuput_dim*self.num_nodes*12)
+        batch_sz=x.shape[0]
+        x=x.reshape(batch_sz,self.iuput_dim*self.num_nodes*12)
         x=self.layer1(x)
-        x=x.reshape(64,12,207,1)
+        x=x.reshape(batch_sz,12,207,1)
         return x
 
 class Process_Handler():
@@ -52,6 +55,8 @@ class Process_Handler():
     def set_loss(loss_name): #todo loss and optimzer set
         if loss_name=='MSELoss':
             return nn.MSELoss()
+        elif loss_name=='L1Loss':
+            return nn.L1Loss()
         else:
             raise AttributeError('No Such Loss')
 
@@ -62,9 +67,11 @@ class Process_Handler():
             x=torch.from_numpy(x).float() #todo prepocessing
             y=torch.from_numpy(y).float()
             pred=self.model(x)
+            pred=self.loader.reverse_scale_data(pred)
             loss=self.loss_fn(pred,y)
             loss.backward()
             self.optimizer.step()
+            print(loss)
         pass
 
     def val(self):

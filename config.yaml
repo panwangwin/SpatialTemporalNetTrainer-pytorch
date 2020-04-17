@@ -7,7 +7,7 @@ train:
   batch_size: 64
   learning_rate: 0.01
   epochs: 100
-  loss_fn: MSELoss
+  loss_fn: L1Loss
   optimizer: Adam
 
 model:
