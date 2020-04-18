@@ -124,12 +124,16 @@ class DataLoader():
         return stage
 
     def get(self,batch_size):
+        '''
+        :param batch_size:
+        :return: shape:[batch_size,seq_len/horizon,num_nodes,input_dim]
+        '''
         self.current_batch=0
         data=self.scaled_data[self.stage]
         length=len(data['x'])
         batches=length/batch_size
         def iterator():
-            while self.current_batch<batches-1:
+            while self.current_batch<batches:
                 idx=self.current_batch*batch_size
                 yield(data['x'][idx:idx+batch_size],data['y'][idx:idx+batch_size])
                 self.current_batch=self.current_batch+1

@@ -3,6 +3,7 @@
 # Author:Wang Pan
 # Purpose:
 #
+
 import pickle
 from DataLoader import DataLoader
 import utils
@@ -12,7 +13,6 @@ import torch.nn as nn
 import torch.nn.functional as fn
 import torch.optim as optim
 import numpy as np
-import pandas as pd
 import argparse
 import yaml
 
@@ -84,22 +84,40 @@ class Process_Handler():
         print('TRINING Finished!')
         pass
 
-    def val(self):
+    def val(self):#todo not batch feed but whole feed
         self.model.eval()
         self.loader.set('val')
-        total_loss=[]
+        total_pred=[]
+        total_y=[]
         for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
             x=torch.from_numpy(x).float()
-            y=torch.from_numpy(y).float()
             pred=self.model(x)
+            total_y.append(y)
             pred=self.loader.inverse_scale_data(pred)
-            loss=self.loss_fn(pred,y)
-            total_loss.append(loss.detach().numpy())
-        return np.mean(total_loss)
+            total_pred.append(pred.detach().numpy())
+        pred=np.concatenate(total_pred,axis=0)
+        y=np.concatenate(total_y,axis=0)
+        return utils.masked_mae_np(pred,y,null_val=0)
 
     def test(self):
         self.model.eval()
-        pass
+        self.loader.set('test')
+        total_pred=[]
+        total_y=[]
+        for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
+            x=torch.from_numpy(x).float()
+            pred=self.model(x)
+            total_y.append(y)
+            pred=self.loader.inverse_scale_data(pred)
+            total_pred.append(pred.detach().numpy())
+        pred=np.concatenate(total_pred,axis=0)
+        y=np.concatenate(total_y,axis=0)
+        horizon_error=[]
+        for horizon in range(pred.shape[1]):
+            pred_i=pred[:,horizon,:,:]
+            y_i=y[:,horizon,:,:]
+            horizon_error.append(utils.masked_mae_np(pred_i,y_i,null_val=0))
+        return horizon_error
 
     def save(self,filename):
         torch.save({'model_state_dict': self.model.state_dict(),
