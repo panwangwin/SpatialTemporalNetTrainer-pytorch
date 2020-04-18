@@ -1,0 +1,59 @@
+2020-04-18 18:00:36,991 - main.py[line:97] - INFO: Now TRIANING...
+2020-04-18 18:00:50,787 - main.py[line:106] - INFO: TRINING Finished!
+2020-04-18 18:00:51,927 - main.py[line:183] - INFO: [548.49384, 579.3138, 605.5516, 524.3077, 587.9433, 607.0657, 630.56586, 673.59375, 688.90204, 669.5182, 726.0395, 726.7281]
+2020-04-18 18:00:51,927 - main.py[line:184] - INFO: [709.9223, 760.1722, 792.6001, 692.1355, 779.5517, 799.9426, 844.0457, 901.7467, 946.6053, 939.09906, 999.9373, 1019.0612]
+2020-04-18 18:00:51,927 - main.py[line:97] - INFO: Now TRIANING...
+2020-04-18 18:01:05,893 - main.py[line:106] - INFO: TRINING Finished!
+2020-04-18 18:01:06,397 - main.py[line:97] - INFO: Now TRIANING...
+2020-04-18 18:01:20,364 - main.py[line:106] - INFO: TRINING Finished!
+2020-04-18 18:01:20,872 - main.py[line:97] - INFO: Now TRIANING...
+2020-04-18 18:15:39,401 - main.py[line:98] - INFO: Now TRIANING...
+2020-04-18 18:15:52,915 - main.py[line:107] - INFO: TRINING Finished!
+2020-04-18 18:15:53,455 - main.py[line:183] - INFO: Epoch [0/100] val_mae: 642.6043, using time 14.1s
+2020-04-18 18:16:37,787 - main.py[line:98] - INFO: Now TRIANING...
+2020-04-18 18:16:51,520 - main.py[line:107] - INFO: TRINING Finished!
+2020-04-18 18:16:52,133 - main.py[line:183] - INFO: Epoch [0/100] val_mae: 646.9572, using time 14.3s
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 01, MAE: 610.11, RMSE: 791.77
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 02, MAE: 567.37, RMSE: 742.91
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 03, MAE: 588.59, RMSE: 769.82
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 04, MAE: 575.15, RMSE: 764.06
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 05, MAE: 549.72, RMSE: 726.89
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 06, MAE: 606.45, RMSE: 798.61
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 07, MAE: 640.41, RMSE: 860.49
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 08, MAE: 665.83, RMSE: 906.44
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 09, MAE: 668.08, RMSE: 912.09
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 10, MAE: 674.31, RMSE: 951.87
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 11, MAE: 698.01, RMSE: 963.53
+2020-04-18 18:16:52,723 - main.py[line:191] - INFO: Horizon 12, MAE: 717.41, RMSE: 999.69
+2020-04-18 18:16:52,724 - main.py[line:98] - INFO: Now TRIANING...
+2020-04-18 18:17:07,378 - main.py[line:107] - INFO: TRINING Finished!
+2020-04-18 18:17:07,927 - main.py[line:183] - INFO: Epoch [1/100] val_mae: 1426.6667, using time 15.2s
+2020-04-18 18:17:07,927 - main.py[line:98] - INFO: Now TRIANING...
+2020-04-18 18:26:55,512 - main.py[line:99] - INFO: Now TRIANING...
+2020-04-18 18:27:10,266 - main.py[line:108] - INFO: TRINING Finished!
+2020-04-18 18:27:10,900 - main.py[line:184] - INFO: Epoch [0/100] val_mae: 12.8901, using time 15.4s
+2020-04-18 18:27:11,565 - main.py[line:192] - INFO: Horizon 01, MAE: 12.39, RMSE: 14.84
+2020-04-18 18:27:11,565 - main.py[line:192] - INFO: Horizon 02, MAE: 12.47, RMSE: 14.89
+2020-04-18 18:27:11,565 - main.py[line:192] - INFO: Horizon 03, MAE: 12.37, RMSE: 14.78
+2020-04-18 18:27:11,565 - main.py[line:192] - INFO: Horizon 04, MAE: 12.48, RMSE: 15.03
+2020-04-18 18:27:11,566 - main.py[line:192] - INFO: Horizon 05, MAE: 12.52, RMSE: 15.10
+2020-04-18 18:27:11,566 - main.py[line:192] - INFO: Horizon 06, MAE: 12.72, RMSE: 15.25
+2020-04-18 18:27:11,566 - main.py[line:192] - INFO: Horizon 07, MAE: 12.63, RMSE: 15.20
+2020-04-18 18:27:11,566 - main.py[line:192] - INFO: Horizon 08, MAE: 12.83, RMSE: 15.68
+2020-04-18 18:27:11,566 - main.py[line:192] - INFO: Horizon 09, MAE: 12.94, RMSE: 15.70
+2020-04-18 18:27:11,566 - main.py[line:192] - INFO: Horizon 10, MAE: 13.15, RMSE: 16.10
+2020-04-18 18:27:11,566 - main.py[line:192] - INFO: Horizon 11, MAE: 13.08, RMSE: 15.95
+2020-04-18 18:27:11,566 - main.py[line:192] - INFO: Horizon 12, MAE: 13.27, RMSE: 16.20
+2020-04-18 18:27:11,566 - main.py[line:99] - INFO: Now TRIANING...
+2020-04-18 18:27:26,983 - main.py[line:108] - INFO: TRINING Finished!
+2020-04-18 18:27:27,625 - main.py[line:184] - INFO: Epoch [1/100] val_mae: 12.8146, using time 16.1s
+2020-04-18 18:27:27,625 - main.py[line:99] - INFO: Now TRIANING...
+2020-04-18 18:27:43,346 - main.py[line:108] - INFO: TRINING Finished!
+2020-04-18 18:27:44,011 - main.py[line:184] - INFO: Epoch [2/100] val_mae: 12.7623, using time 16.4s
+2020-04-18 18:27:44,011 - main.py[line:99] - INFO: Now TRIANING...
+2020-04-18 18:28:00,193 - main.py[line:108] - INFO: TRINING Finished!
+2020-04-18 18:28:00,895 - main.py[line:184] - INFO: Epoch [3/100] val_mae: 12.7333, using time 16.9s
+2020-04-18 18:28:00,895 - main.py[line:99] - INFO: Now TRIANING...
+2020-04-18 18:28:16,829 - main.py[line:108] - INFO: TRINING Finished!
+2020-04-18 18:28:17,501 - main.py[line:184] - INFO: Epoch [4/100] val_mae: 12.7149, using time 16.6s
+2020-04-18 18:28:17,501 - main.py[line:99] - INFO: Now TRIANING...

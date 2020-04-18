@@ -36,7 +36,7 @@ class DataLoader():
         m = graph.number_of_edges()
         print('Graph have %d nodes and %d links.\n'
               'Input sequence length: %d \n'
-              'Forecasting horizon: %d \n'
+              'Forecasting horizon: %d'
                % (n, m, self.seq_len, self.horizon))
         self.graph = graph
         self.data = {}

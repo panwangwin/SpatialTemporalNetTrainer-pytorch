@@ -15,9 +15,31 @@ import torch.optim as optim
 import numpy as np
 import argparse
 import yaml
-
+import logging
+import os
+import time
 
 #todo logger module
+
+def logging_module_init(model_dir):
+    logger = logging.getLogger('info')
+    logger.setLevel(level=logging.DEBUG)
+
+    formatter = logging.Formatter('%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
+
+    file_handler = logging.FileHandler(os.path.join(model_dir, 'info.log'))
+    file_handler.setLevel(level=logging.INFO)
+    file_handler.setFormatter(formatter)
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.DEBUG)
+    stream_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+    return logger
+
+
 
 def pickle_save(filename,object):
     with open(filename,'wb') as f:
@@ -39,12 +61,14 @@ class MyModel(nn.Module): #todo find the essence of the batch
         batch_sz=x.shape[0]
         x=x.reshape(batch_sz,self.iuput_dim*self.num_nodes*12)
         x=self.layer1(x)
+        x=torch.tanh(x)
         x=x.reshape(batch_sz,12,207,1)
         return x
 
 class Process_Handler():
-    def __init__(self,loader,dir_args,model_args,train_args):
+    def __init__(self,loader,logger,dir_args,model_args,train_args):
         self.loader=loader
+        self.logger=logger
         self.save_dir=dir_args['save_dir']
         self.log_dir=dir_args['log_dir']
         self.batch_size=train_args['batch_size']
@@ -72,7 +96,7 @@ class Process_Handler():
     def train(self):
         self.model.train()
         self.loader.set('train')
-        print('Now TRIANING...')
+        self.logger.info('Now TRIANING...')
         for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
             x=torch.from_numpy(x).float() #todo prepocessing
             y=torch.from_numpy(y).float()
@@ -81,7 +105,7 @@ class Process_Handler():
             loss=self.loss_fn(pred,y)
             loss.backward()
             self.optimizer.step()
-        print('TRINING Finished!')
+        self.logger.info('TRINING Finished!')
         pass
 
     def val(self):#todo not batch feed but whole feed
@@ -148,17 +172,26 @@ def main(args):
     model_args=args['model']
     train_args=args['train']
     loader=DataLoader(data_args) #todo loader set and reset
-    handler=Process_Handler(loader,dir_args,model_args,train_args)
+    logger=logging_module_init(dir_args['log_dir'])
+    handler=Process_Handler(loader,logger,dir_args,model_args,train_args)
     max_val=10
     for _ in range(train_args['epochs']):
+        start_time=time.time()
         handler.train()
         val_mae=handler.val()
+        end_time=time.time()
+        logger.info('Epoch [{}/{}] val_mae: {:.4f}, using time {:.1f}s'.format(
+            _, train_args['epochs'], val_mae, (end_time - start_time)))
         if val_mae<max_val:
             handler.save()
         if _%10==0:
             MAE,RMSE=handler.test()
-            print(MAE)
-            print(RMSE)
+            for i, each in enumerate(MAE):
+                logger.info(
+                "Horizon {:02d}, MAE: {:.2f}, RMSE: {:.2f}".format(
+                    i + 1, MAE[i], RMSE[i])
+                )
+
     handler.load()
     MAE,RMSE=handler.test()
     pass
