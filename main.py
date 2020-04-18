@@ -85,6 +85,10 @@ class Process_Handler():
         pass
 
     def val(self):#todo not batch feed but whole feed
+        '''
+        :return:
+        All validate set are used
+        '''
         self.model.eval()
         self.loader.set('val')
         total_pred=[]
@@ -100,6 +104,11 @@ class Process_Handler():
         return utils.masked_mae_np(pred,y,null_val=0)
 
     def test(self):
+        '''
+        :return:
+        All test set are used
+        Horizon wised error check
+        '''
         self.model.eval()
         self.loader.set('test')
         total_pred=[]
@@ -112,12 +121,14 @@ class Process_Handler():
             total_pred.append(pred.detach().numpy())
         pred=np.concatenate(total_pred,axis=0)
         y=np.concatenate(total_y,axis=0)
-        horizon_error=[]
+        horizon_MAE=[]
+        horizon_RMSE=[]
         for horizon in range(pred.shape[1]):
             pred_i=pred[:,horizon,:,:]
             y_i=y[:,horizon,:,:]
-            horizon_error.append(utils.masked_mae_np(pred_i,y_i,null_val=0))
-        return horizon_error
+            horizon_MAE.append(utils.masked_mae_np(pred_i,y_i,null_val=0))
+            horizon_RMSE.append(utils.masked_rmse_np(pred_i,y_i,null_val=0))
+        return horizon_MAE,horizon_RMSE
 
     def save(self,filename):
         torch.save({'model_state_dict': self.model.state_dict(),
@@ -144,8 +155,12 @@ def main(args):
         val_mae=handler.val()
         if val_mae<max_val:
             handler.save()
+        if _%10==0:
+            MAE,RMSE=handler.test()
+            print(MAE)
+            print(RMSE)
     handler.load()
-    test_table=handler.test()
+    MAE,RMSE=handler.test()
     pass
 
 
