@@ -20,8 +20,6 @@ import os
 import time
 import models
 
-#todo logger module
-
 def logging_module_init(model_dir):
     logger = logging.getLogger('info')
     logger.setLevel(level=logging.DEBUG)
@@ -62,7 +60,7 @@ class Process_Handler():
         self.loss_fn=self.set_loss(train_args['loss_fn'])
         self.model=self.set_model(model_args['model_name'])
         self.model=self.model.to(self.dev)
-        if train_args['optimizer']=='Adam':
+        if train_args['optimizer']=='SGD':
             self.optimizer=optim.SGD(self.model.parameters(),lr=self.lr)
 
     @staticmethod
@@ -90,18 +88,18 @@ class Process_Handler():
     def train(self):
         self.model.train()
         self.loader.set('train')
-        self.logger.info('Now TRAINING...')
+        self.logger.info('Training...')
         for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
-            x=torch.from_numpy(x).float() #todo prepocessing
-            x=x.to(self.dev)
+            x=torch.from_numpy(x).float()
             y=torch.from_numpy(y).float()
+            x=x.to(self.dev)
             y=y.to(self.dev)
             pred=self.model(x)
             pred=self.loader.inverse_scale_data(pred)
             loss=self.loss_fn(pred,y)
             loss.backward()
             self.optimizer.step()
-        self.logger.info('TRAINING Finished!')
+        self.logger.info('Training for current epoch Finished!')
         pass
 
     def val(self):#todo not batch feed but whole feed
@@ -109,6 +107,7 @@ class Process_Handler():
         :return:
         All validate set are used
         '''
+        self.logger.info('Validating')
         self.model.eval()
         self.loader.set('val')
         total_pred=[]
@@ -130,6 +129,7 @@ class Process_Handler():
         All test set are used
         Horizon wised error check
         '''
+        self.logger.info('Testing...')
         self.model.eval()
         self.loader.set('test')
         total_pred=[]
@@ -180,8 +180,6 @@ def main(args):
         end_time=time.time()
         logger.info('Epoch [{}/{}] val_mae: {:.4f}, using time {:.1f}s'.format(
             _, train_args['epochs'], val_mae, (end_time - start_time)))
-        print('try default upload wdnmd')
-        print('wozai shishi')
         if val_mae<max_val:
             handler.save()
         if _%10==0:

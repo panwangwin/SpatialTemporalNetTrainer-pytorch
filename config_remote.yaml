@@ -8,7 +8,7 @@ train:
   learning_rate: 0.01
   epochs: 100
   loss_fn: masked MAELoss
-  optimizer: Adam
+  optimizer: SGD
 
 model:
   model_name: FNN

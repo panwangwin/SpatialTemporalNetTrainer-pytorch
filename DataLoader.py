@@ -120,7 +120,6 @@ class DataLoader():
 
     def set(self,stage):
         self.stage=stage
-        print("Now using %sing set"%(stage))
         return stage
 
     def get(self,batch_size):
