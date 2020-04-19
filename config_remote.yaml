@@ -15,8 +15,8 @@ model:
 
 data:
   data_name:
-  data_dir: /Users/panwang/Datasets/METR-LA/metr-la.h5
-  adj_mx_dir: /Users/panwang/Datasets/METR-LA/adj_mx_la.pkl
+  data_dir: ../Datasets/METR-LA/metr-la.h5
+  adj_mx_dir: ../Datasets/METR-LA/adj_mx_la.pkl
   train_ratio: 0.8
   test_ratio: 0.1
   val_ratio: 0.1

@@ -57,3 +57,27 @@
 2020-04-18 18:28:16,829 - main.py[line:108] - INFO: TRINING Finished!
 2020-04-18 18:28:17,501 - main.py[line:184] - INFO: Epoch [4/100] val_mae: 12.7149, using time 16.6s
 2020-04-18 18:28:17,501 - main.py[line:99] - INFO: Now TRIANING...
+2020-04-18 18:39:08,402 - main.py[line:88] - INFO: Now TRIANING...
+2020-04-18 18:39:22,565 - main.py[line:97] - INFO: TRINING Finished!
+2020-04-18 18:39:23,189 - main.py[line:173] - INFO: Epoch [0/100] val_mae: 12.8596, using time 14.8s
+2020-04-18 18:39:23,821 - main.py[line:181] - INFO: Horizon 01, MAE: 12.33, RMSE: 14.76
+2020-04-18 18:39:23,821 - main.py[line:181] - INFO: Horizon 02, MAE: 12.37, RMSE: 14.75
+2020-04-18 18:39:23,821 - main.py[line:181] - INFO: Horizon 03, MAE: 12.55, RMSE: 15.11
+2020-04-18 18:39:23,821 - main.py[line:181] - INFO: Horizon 04, MAE: 12.51, RMSE: 15.01
+2020-04-18 18:39:23,821 - main.py[line:181] - INFO: Horizon 05, MAE: 12.67, RMSE: 15.27
+2020-04-18 18:39:23,822 - main.py[line:181] - INFO: Horizon 06, MAE: 12.64, RMSE: 15.15
+2020-04-18 18:39:23,822 - main.py[line:181] - INFO: Horizon 07, MAE: 12.75, RMSE: 15.44
+2020-04-18 18:39:23,822 - main.py[line:181] - INFO: Horizon 08, MAE: 12.79, RMSE: 15.47
+2020-04-18 18:39:23,822 - main.py[line:181] - INFO: Horizon 09, MAE: 12.95, RMSE: 15.71
+2020-04-18 18:39:23,822 - main.py[line:181] - INFO: Horizon 10, MAE: 13.01, RMSE: 15.87
+2020-04-18 18:39:23,822 - main.py[line:181] - INFO: Horizon 11, MAE: 13.05, RMSE: 15.85
+2020-04-18 18:39:23,822 - main.py[line:181] - INFO: Horizon 12, MAE: 13.10, RMSE: 15.96
+2020-04-18 18:39:23,822 - main.py[line:88] - INFO: Now TRIANING...
+2020-04-18 18:39:39,198 - main.py[line:97] - INFO: TRINING Finished!
+2020-04-18 18:39:39,867 - main.py[line:173] - INFO: Epoch [1/100] val_mae: 12.7813, using time 16.0s
+2020-04-18 18:39:39,868 - main.py[line:88] - INFO: Now TRIANING...
+2020-04-18 18:39:55,662 - main.py[line:97] - INFO: TRINING Finished!
+2020-04-18 18:39:56,329 - main.py[line:173] - INFO: Epoch [2/100] val_mae: 12.7384, using time 16.5s
+2020-04-18 18:39:56,329 - main.py[line:88] - INFO: Now TRIANING...
+
+ranhouwozainongong

@@ -18,6 +18,7 @@ import yaml
 import logging
 import os
 import time
+import models
 
 #todo logger module
 
@@ -46,27 +47,12 @@ def pickle_save(filename,object):
         pickle.dump(object,f)
 
 
-class MyModel(nn.Module): #todo find the essence of the batch
-    def __init__(self):
-        super(MyModel,self).__init__()
-        self.iuput_dim=2
-        self.output_dim=1
-        self.num_nodes=207
-        self.layer1=nn.Linear(self.iuput_dim*self.num_nodes*12,self.num_nodes*12)
-    def forward(self,x):
-        '''
-        :param x: (batch_size,... other input dimensions)
-        :return: y: (batch_size,... other output dimensions)
-        '''
-        batch_sz=x.shape[0]
-        x=x.reshape(batch_sz,self.iuput_dim*self.num_nodes*12)
-        x=self.layer1(x)
-        x=torch.tanh(x)
-        x=x.reshape(batch_sz,12,207,1)
-        return x
-
 class Process_Handler():
     def __init__(self,loader,logger,dir_args,model_args,train_args):
+        use_cuda = torch.cuda.is_available()
+        if use_cuda:
+            logger.info('Using GPU...')
+        self.dev=('cuda' if use_cuda else 'cpu')
         self.loader=loader
         self.logger=logger
         self.save_dir=dir_args['save_dir']
@@ -74,9 +60,17 @@ class Process_Handler():
         self.batch_size=train_args['batch_size']
         self.lr=train_args['learning_rate']
         self.loss_fn=self.set_loss(train_args['loss_fn'])
-        self.model=MyModel()
+        self.model=self.set_model(model_args['model_name'])
+        self.model=self.model.to(self.dev)
         if train_args['optimizer']=='Adam':
             self.optimizer=optim.SGD(self.model.parameters(),lr=self.lr)
+
+    @staticmethod
+    def set_model(model_name):
+        if model_name=='FNN':
+            return models.FNN()
+        else:
+            raise AttributeError('No Such Model!')
 
     @staticmethod
     def set_loss(loss_name): #todo loss and optimzer set
@@ -91,21 +85,23 @@ class Process_Handler():
         elif loss_name=='masked RMSELoss':
             return utils.masked_rmse_torch(null_val=0)
         else:
-            raise AttributeError('No Such Loss')
+            raise AttributeError('No Such Loss!')
 
     def train(self):
         self.model.train()
         self.loader.set('train')
-        self.logger.info('Now TRIANING...')
+        self.logger.info('Now TRAINING...')
         for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
             x=torch.from_numpy(x).float() #todo prepocessing
+            x=x.to(self.dev)
             y=torch.from_numpy(y).float()
+            y=y.to(self.dev)
             pred=self.model(x)
             pred=self.loader.inverse_scale_data(pred)
             loss=self.loss_fn(pred,y)
             loss.backward()
             self.optimizer.step()
-        self.logger.info('TRINING Finished!')
+        self.logger.info('TRAINING Finished!')
         pass
 
     def val(self):#todo not batch feed but whole feed
@@ -119,10 +115,11 @@ class Process_Handler():
         total_y=[]
         for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
             x=torch.from_numpy(x).float()
+            x=x.to(self.dev)
             pred=self.model(x)
             total_y.append(y)
             pred=self.loader.inverse_scale_data(pred)
-            total_pred.append(pred.detach().numpy())
+            total_pred.append(pred.cpu().detach().numpy())
         pred=np.concatenate(total_pred,axis=0)
         y=np.concatenate(total_y,axis=0)
         return utils.masked_mae_np(pred,y,null_val=0)
@@ -139,10 +136,11 @@ class Process_Handler():
         total_y=[]
         for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
             x=torch.from_numpy(x).float()
+            x=x.to(self.dev)
             pred=self.model(x)
             total_y.append(y)
             pred=self.loader.inverse_scale_data(pred)
-            total_pred.append(pred.detach().numpy())
+            total_pred.append(pred.cpu().detach().numpy())
         pred=np.concatenate(total_pred,axis=0)
         y=np.concatenate(total_y,axis=0)
         horizon_MAE=[]
@@ -182,6 +180,8 @@ def main(args):
         end_time=time.time()
         logger.info('Epoch [{}/{}] val_mae: {:.4f}, using time {:.1f}s'.format(
             _, train_args['epochs'], val_mae, (end_time - start_time)))
+        print('try default upload wdnmd')
+        print('wozai shishi')
         if val_mae<max_val:
             handler.save()
         if _%10==0:
@@ -199,7 +199,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='./config.yaml')
+    parser.add_argument('--config', default='./config_remote.yaml')
     args = parser.parse_args()
     with open(args.config,'r') as f:
         args=yaml.load(f)
