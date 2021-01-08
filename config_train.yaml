@@ -1,20 +1,18 @@
 dir:
-  base_dir:
-  save_dir:
-  log_dir: ./model/
+  base_dir: ./model
 
 train:
   batch_size: 64
-  learning_rate: 0.01
+  learning_rate: 0.001
   epochs: 100
   loss_fn: masked MAELoss
-  optimizer: SGD
+  optimizer: Adam
+  weight_decay: 0.01
 
 model:
   model_name: FNN
 
 data:
-  data_name:
   data_dir: /Users/panwang/Datasets/METR-LA/metr-la.h5
   adj_mx_dir: /Users/panwang/Datasets/METR-LA/adj_mx_la.pkl
   train_ratio: 0.8

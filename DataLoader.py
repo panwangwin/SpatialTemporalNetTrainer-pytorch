@@ -3,66 +3,73 @@
 # Filename:DataLoader.py
 # Author:Wang Pan
 # Purpose:
-import pandas as pd
-import pickle
-import networkx as nx
-import scipy
-import numpy as np
 import copy
+import pickle
+
+import networkx as nx
+import numpy as np
+import pandas as pd
+import scipy
+import scipy.sparse as sp
+from scipy.sparse import linalg
+
 
 class DataLoader():
-    def __init__(self,args):
-        #initialization
-        data_dir=args['data_dir']
-        df=pd.read_hdf(data_dir)
-        df_length=len(df)
-        adj_mx_dir=args['adj_mx_dir']
-        with open(adj_mx_dir,'rb') as f:
-            self.adj_mx=pickle.load(f,encoding='latin1')[2]
-        train_ratio=args['train_ratio']
-        test_ratio=args['test_ratio']
-        val_ratio=args['val_ratio']
-        self.seq_len=args['seq_len']
-        self.horizon=args['horizon']
-        assert (train_ratio+val_ratio+test_ratio==1)
+    def __init__(self, args, logger):
+        # initialization
+        data_dir = args['data_dir']
+        df = pd.read_hdf(data_dir)
+        df_length = len(df)
+        adj_mx_dir = args['adj_mx_dir']
+        with open(adj_mx_dir, 'rb') as f:
+            self.adj_mx = pickle.load(f, encoding='latin1')[2]
+        train_ratio = args['train_ratio']
+        test_ratio = args['test_ratio']
+        val_ratio = args['val_ratio']
+        self.logger = logger
+        self.seq_len = args['seq_len']
+        self.horizon = args['horizon']
+        assert (train_ratio + val_ratio + test_ratio == 1)
 
-        df_set={'train':df[:int(train_ratio*df_length)],
-                'val':df[int(train_ratio*df_length):int((train_ratio+val_ratio)*df_length)],
-                'test':df[-int(test_ratio*df_length):]}
+        df_set = {'train': df[:int(train_ratio * df_length)],
+                  'val': df[int(train_ratio * df_length):int((train_ratio + val_ratio) * df_length)],
+                  'test': df[-int(test_ratio * df_length):]}
 
-        #Construct Graph
+        # Construct Graph
         graph = self.mat_to_nx(self.adj_mx)
         n = graph.number_of_nodes()
+        self.num_nodes = n
         m = graph.number_of_edges()
-        print('Graph have %d nodes and %d links.\n'
-              'Input sequence length: %d \n'
-              'Forecasting horizon: %d'
-               % (n, m, self.seq_len, self.horizon))
+        self.logger.info('\nGraph have %d nodes and %d links.'
+                         '\nInput sequence length: %d '
+                         '\nForecasting horizon: %d'
+                         % (n, m, self.seq_len, self.horizon))
         self.graph = graph
+        self.laplacian = self.calculate_scaled_laplacian(self.adj_mx)
         self.data = {}
         for each in df_set:
-            xy={}
-            xy['x'],xy['y']=self.construct_x_y(df_set[each])
-            xy['y']=xy['y'][...,[0]]
-            self.data[each]=xy
-        self.stage=None
-        self.std=self.data['train']['x'][...,0].std()
-        self.mean=self.data['train']['x'][...,0].mean()
-        self.scaled_data=self.rescale_data()
-
+            xy = {}
+            xy['x'], xy['y'] = self.construct_x_y(df_set[each])
+            xy['y'] = xy['y'][..., [0]]
+            self.data[each] = xy
+        self.stage = None
+        self.std = self.data['train']['x'][..., 0].std()
+        self.mean = self.data['train']['x'][..., 0].mean()
+        self.scaled_data = self.rescale_data()
 
     def rescale_data(self):
-        scaled_data={}
+        scaled_data = {}
         for each in self.data:
-            temp_dict={}
-            temp_dict['x']=copy.deepcopy(self.data[each]['x'])
-            temp_dict['x'][...,0]=copy.deepcopy((self.data[each]['x'][...,0]-self.mean)/self.std)
-            temp_dict['y']=copy.deepcopy(self.data[each]['y'])
-            scaled_data[each]=temp_dict
+            temp_dict = {}
+            temp_dict['x'] = copy.deepcopy(self.data[each]['x'])
+            temp_dict['x'][..., 0] = copy.deepcopy((self.data[each]['x'][..., 0] - self.mean) / self.std)
+            temp_dict['y'] = copy.deepcopy(self.data[each]['y'])
+            temp_dict['y'][..., 0] = copy.deepcopy((self.data[each]['y'][..., 0] - self.mean) / self.std)
+            scaled_data[each] = temp_dict
         return scaled_data
 
-    def inverse_scale_data(self,data):
-        data=data*self.std+self.mean
+    def inverse_scale_data(self, data):
+        data = data * self.std + self.mean
         return data
 
     @staticmethod
@@ -76,8 +83,8 @@ class DataLoader():
         return g
 
     def construct_x_y(self,
-            df, add_time_in_day=True, add_day_in_week=False
-    ):
+                      df, add_time_in_day=True, add_day_in_week=False
+                      ):
         """
         Generate samples from
         :param df:
@@ -101,8 +108,8 @@ class DataLoader():
             day_in_week[np.arange(num_samples), :, df.index.dayofweek] = 1
             data_list.append(day_in_week)
 
-        x_offsets=np.arange(-self.seq_len+1,1)
-        y_offsets=np.arange(1,self.horizon+1)
+        x_offsets = np.arange(-self.seq_len + 1, 1)
+        y_offsets = np.arange(1, self.horizon + 1)
         data = np.concatenate(data_list, axis=-1)
         # epoch_len = num_samples + min(x_offsets) - max(y_offsets)
         x, y = [], []
@@ -118,25 +125,53 @@ class DataLoader():
         y = np.stack(y, axis=0)
         return x, y
 
-    def set(self,stage):
-        self.stage=stage
+    def set(self, stage):
+        self.stage = stage
         return stage
 
-    def get(self,batch_size):
+    def get(self, batch_size):
         '''
         :param batch_size:
         :return: shape:[batch_size,seq_len/horizon,num_nodes,input_dim]
         '''
-        self.current_batch=0
-        data=self.scaled_data[self.stage]
-        length=len(data['x'])
-        batches=length/batch_size
+        self.current_batch = 0
+        data = self.scaled_data[self.stage]
+        length = len(data['x'])
+        batches = length / batch_size
+
         def iterator():
-            while self.current_batch<batches:
-                idx=self.current_batch*batch_size
-                yield(data['x'][idx:idx+batch_size],data['y'][idx:idx+batch_size])
-                self.current_batch=self.current_batch+1
+            while self.current_batch < batches:
+                idx = self.current_batch * batch_size
+                yield (data['x'][idx:idx + batch_size], data['y'][idx:idx + batch_size])
+                self.current_batch = self.current_batch + 1
+
         return iterator()
 
+    def calculate_normalized_laplacian(self, adj):
+        """
+        A must be symmetric matrix
+        # L = D^-1/2 (D-A) D^-1/2 = I - D^-1/2 A D^-1/2
+        # D = diag(A 1)
+        :param adj:
+        :return:
+        """
+        adj = sp.coo_matrix(adj)
+        d = np.array(adj.sum(1))
+        d_inv_sqrt = np.power(d, -0.5).flatten()
+        d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
+        d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
+        normalized_laplacian = sp.eye(adj.shape[0]) - adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocoo()
+        return normalized_laplacian
 
-
+    def calculate_scaled_laplacian(self, adj_mx, lambda_max=2, undirected=True):
+        if undirected:
+            adj_mx = np.maximum.reduce([adj_mx, adj_mx.T])
+        L = self.calculate_normalized_laplacian(adj_mx)
+        if lambda_max is None:
+            lambda_max, _ = linalg.eigsh(L, 1, which='LM')
+            lambda_max = lambda_max[0]
+        L = sp.csr_matrix(L)
+        M, _ = L.shape
+        I = sp.identity(M, format='csr', dtype=L.dtype)
+        L = (2 / lambda_max * L) - I
+        return L.astype(np.float32).todense()

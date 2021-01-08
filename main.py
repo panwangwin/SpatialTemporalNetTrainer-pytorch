@@ -4,29 +4,37 @@
 # Purpose:
 #
 
+import argparse
+import logging
+import os
 import pickle
-from DataLoader import DataLoader
-import utils
+import time
+import traceback
+from dateutil import tz
+
+import numpy as np
+import pandas as pd
 import torch
 import torch.autograd
 import torch.nn as nn
-import torch.nn.functional as fn
 import torch.optim as optim
-import numpy as np
-import argparse
 import yaml
-import logging
-import os
-import time
-import models
+import json
 
-def logging_module_init(model_dir):
+import models
+import DCRNNModel
+import utils
+from DataLoader import DataLoader
+
+
+# Logging unit init
+def logging_module_init(logger_dir):
     logger = logging.getLogger('info')
     logger.setLevel(level=logging.DEBUG)
 
     formatter = logging.Formatter('%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 
-    file_handler = logging.FileHandler(os.path.join(model_dir, 'info.log'))
+    file_handler = logging.FileHandler(logger_dir)
     file_handler.setLevel(level=logging.INFO)
     file_handler.setFormatter(formatter)
 
@@ -39,48 +47,71 @@ def logging_module_init(model_dir):
     return logger
 
 
+def pickle_save(filename, object):
+    with open(filename, 'wb') as f:
+        pickle.dump(object, f)
 
-def pickle_save(filename,object):
-    with open(filename,'wb') as f:
-        pickle.dump(object,f)
 
-
+# Main Handler
 class Process_Handler():
-    def __init__(self,loader,logger,dir_args,model_args,train_args):
+    def __init__(self, loader, logger, model_args, train_args):
         use_cuda = torch.cuda.is_available()
         if use_cuda:
             logger.info('Using GPU...')
-        self.dev=('cuda' if use_cuda else 'cpu')
-        self.loader=loader
-        self.logger=logger
-        self.save_dir=dir_args['save_dir']
-        self.log_dir=dir_args['log_dir']
-        self.batch_size=train_args['batch_size']
-        self.lr=train_args['learning_rate']
-        self.loss_fn=self.set_loss(train_args['loss_fn'])
-        self.model=self.set_model(model_args['model_name'])
-        self.model=self.model.to(self.dev)
-        if train_args['optimizer']=='SGD':
-            self.optimizer=optim.SGD(self.model.parameters(),lr=self.lr)
+        self.train_args = train_args
+        self.dev = ('cuda' if use_cuda else 'cpu')
+        self.loader = loader
+        self.logger = logger
+        self.det=model_args['model_details']
+        self.batch_size = train_args['batch_size']
+        self.lr = train_args['learning_rate']
+        self.loss_fn = self.set_loss(train_args['loss_fn'])
+        self.model = self.set_model(model_args['model_name'])
+        self.model = self.model.to(self.dev)
+        self.set_optimizer(train_args['optimizer'])
+        if train_args['lr_scheduler']:
+            self.lr_scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer=self.optimizer,
+                                                        milestones=train_args['lr_milestones'],
+                                                        gamma=train_args['lr_decay_rate'])
+        if 'scheduled_sampling' in model_args:
+            self.schedule_sampling = True
+        else:
+            self.schedule_sampling = False
 
-    @staticmethod
-    def set_model(model_name):
-        if model_name=='FNN':
-            return models.FNN()
+    def set_optimizer(self, optimizer):
+        if optimizer == 'SGD':
+            self.optimizer = optim.SGD(self.model.parameters(), lr=self.lr)
+        elif optimizer == 'Adam':
+            weight_decay = self.train_args['weight_decay']
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=weight_decay)
+        else:
+            raise AttributeError('No such optimizer')
+
+    def set_model(self,model_name):
+        if model_name == 'FNN':
+            return models.FNN(self.det['input_dim'],self.det['output_dim'],self.loader.seq_len,self.loader.horizon,
+                              self.loader.num_nodes,self.det['hidden_dim'])
+        elif model_name == 'S2SGRU':
+            return models.S2SGRU(self.det['input_dim'],self.det['output_dim'],self.loader.seq_len,self.loader.horizon,
+                              self.loader.num_nodes,self.det['hidden_dim'],self.det['num_layers'])
+        elif model_name == 'DCRNN':
+            self.graph=[self.loader.laplacian]
+            self.graph=[torch.tensor(i).to(self.dev) for i in self.graph]
+            return DCRNNModel.DCRNNModel(self.det['input_dim'],self.det['output_dim'],self.loader.seq_len,self.loader.horizon,
+                              self.loader.num_nodes,self.det['hidden_dim'],self.det['num_layers'],self.graph, self.det['order'])
         else:
             raise AttributeError('No Such Model!')
 
-    @staticmethod
-    def set_loss(loss_name): #todo loss and optimzer set
-        if loss_name=='MSELoss':
+    def set_loss(self,loss_name):
+        if loss_name == 'MSELoss':
             return nn.MSELoss()
-        elif loss_name=='L1Loss':
+        elif loss_name == 'L1Loss':
             return nn.L1Loss()
-        elif loss_name=='masked MSELoss':
+        elif loss_name == 'masked MSELoss':
             return utils.masked_mse_torch(null_val=0)
-        elif loss_name=='masked MAELoss':
+        elif loss_name == 'masked MAELoss':
             return utils.masked_mae_torch(null_val=0)
-        elif loss_name=='masked RMSELoss':
+        elif loss_name == 'masked RMSELoss':
             return utils.masked_rmse_torch(null_val=0)
         else:
             raise AttributeError('No Such Loss!')
@@ -89,116 +120,160 @@ class Process_Handler():
         self.model.train()
         self.loader.set('train')
         self.logger.info('Training...')
-        for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
-            x=torch.from_numpy(x).float()
-            y=torch.from_numpy(y).float()
-            x=x.to(self.dev)
-            y=y.to(self.dev)
-            pred=self.model(x)
-            pred=self.loader.inverse_scale_data(pred)
-            loss=self.loss_fn(pred,y)
+        for i, (x, y) in enumerate(self.loader.get(self.batch_size)):
+            self.optimizer.zero_grad()
+            x = torch.from_numpy(x).float()
+            y = torch.from_numpy(y).float()
+            x = x.to(self.dev)
+            y = y.to(self.dev)
+            if self.schedule_sampling==True:
+                pred=self.model(x,y)
+            else:
+                pred = self.model(x)
+            loss = self.loss_fn(pred, y)
             loss.backward()
             self.optimizer.step()
+        if self.train_args['lr_scheduler']:
+            self.lr_scheduler.step()
         self.logger.info('Training for current epoch Finished!')
-        pass
 
-    def val(self):#todo not batch feed but whole feed
-        '''
+
+    def val(self):
+        """
         :return:
-        All validate set are used
-        '''
+        """
         self.logger.info('Validating')
         self.model.eval()
         self.loader.set('val')
-        total_pred=[]
-        total_y=[]
-        for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
-            x=torch.from_numpy(x).float()
-            x=x.to(self.dev)
-            pred=self.model(x)
-            total_y.append(y)
-            pred=self.loader.inverse_scale_data(pred)
+        total_pred = []
+        total_y = []
+        for i, (x, y) in enumerate(self.loader.get(self.batch_size)):
+            x = torch.from_numpy(x).float()
+            x = x.to(self.dev)
+            if self.schedule_sampling==True:
+                y = torch.from_numpy(y).float()
+                y = y.to(self.dev)
+                pred=self.model(x,y,teaching_force=0)
+                y = y.cpu().detach().numpy()
+            else:
+                pred = self.model(x)
+            total_y.append(self.loader.inverse_scale_data(y))
+            pred = self.loader.inverse_scale_data(pred)
             total_pred.append(pred.cpu().detach().numpy())
-        pred=np.concatenate(total_pred,axis=0)
-        y=np.concatenate(total_y,axis=0)
-        return utils.masked_mae_np(pred,y,null_val=0)
+        pred = np.concatenate(total_pred, axis=0)
+        y = np.concatenate(total_y, axis=0)
+        return utils.masked_mae_np(pred, y, null_val=0)
 
     def test(self):
-        '''
+        """
         :return:
-        All test set are used
-        Horizon wised error check
-        '''
+        """
         self.logger.info('Testing...')
         self.model.eval()
         self.loader.set('test')
-        total_pred=[]
-        total_y=[]
-        for i,(x,y) in enumerate(self.loader.get(self.batch_size)):
-            x=torch.from_numpy(x).float()
-            x=x.to(self.dev)
-            pred=self.model(x)
-            total_y.append(y)
-            pred=self.loader.inverse_scale_data(pred)
+        total_pred = []
+        total_y = []
+        for i, (x, y) in enumerate(self.loader.get(self.batch_size)):
+            x = torch.from_numpy(x).float()
+            x = x.to(self.dev)
+            if self.schedule_sampling==True:
+                y = torch.from_numpy(y).float()
+                y = y.to(self.dev)
+                pred=self.model(x,y,teaching_force=0)
+                y = y.cpu().detach().numpy()
+            else:
+                pred = self.model(x)
+            total_y.append(self.loader.inverse_scale_data(y))
+            pred = self.loader.inverse_scale_data(pred)
             total_pred.append(pred.cpu().detach().numpy())
-        pred=np.concatenate(total_pred,axis=0)
-        y=np.concatenate(total_y,axis=0)
-        horizon_MAE=[]
-        horizon_RMSE=[]
+        pred = np.concatenate(total_pred, axis=0)
+        y = np.concatenate(total_y, axis=0)
+        horizon_MAE = []
+        horizon_RMSE = []
         for horizon in range(pred.shape[1]):
-            pred_i=pred[:,horizon,:,:]
-            y_i=y[:,horizon,:,:]
-            horizon_MAE.append(utils.masked_mae_np(pred_i,y_i,null_val=0))
-            horizon_RMSE.append(utils.masked_rmse_np(pred_i,y_i,null_val=0))
-        return horizon_MAE,horizon_RMSE
+            pred_i = pred[:, horizon, :, :]
+            y_i = y[:, horizon, :, :]
+            horizon_MAE.append(utils.masked_mae_np(pred_i, y_i, null_val=0))
+            horizon_RMSE.append(utils.masked_rmse_np(pred_i, y_i, null_val=0))
+        return horizon_MAE, horizon_RMSE
 
-    def save(self,filename):
+    def save(self, filename):
         torch.save({'model_state_dict': self.model.state_dict(),
-                    'optimizer_state_dict': self.optmz.state_dict()},
+                    'optimizer_state_dict': self.optimizer.state_dict()},
                    filename)
         return filename
 
-    def load(self,filename):
+    def load(self, filename):
         ckp = torch.load(filename)
         self.model.load_state_dict(ckp['model_state_dict'])
-        self.optmz.load_state_dict(ckp['optimizer_state_dict'])
+        self.optimizer.load_state_dict(ckp['optimizer_state_dict'])
         return filename
 
-def main(args):
-    dir_args=args['dir']
-    data_args=args['data']
-    model_args=args['model']
-    train_args=args['train']
-    loader=DataLoader(data_args) #todo loader set and reset
-    logger=logging_module_init(dir_args['log_dir'])
-    handler=Process_Handler(loader,logger,dir_args,model_args,train_args)
-    max_val=10
-    for _ in range(train_args['epochs']):
-        start_time=time.time()
-        handler.train()
-        val_mae=handler.val()
-        end_time=time.time()
-        logger.info('Epoch [{}/{}] val_mae: {:.4f}, using time {:.1f}s'.format(
-            _, train_args['epochs'], val_mae, (end_time - start_time)))
-        if val_mae<max_val:
-            handler.save()
-        if _%10==0:
-            MAE,RMSE=handler.test()
-            for i, each in enumerate(MAE):
-                logger.info(
+
+def main(args,status):
+    dir_args = args['dir']
+    data_args = args['data']
+    model_args = args['model']
+    train_args = args['train']
+    max_val = 100000
+
+    if status=='Train':
+        model_dir = dir_args['base_dir'] + '/model_%s_%s' % (model_args['model_name'], str(pd.datetime.now(tz=tz.gettz('Asia/Shanghai'))))
+        os.mkdir(model_dir)
+        dir_args['model_dir'] = model_dir
+        logger = logging_module_init(model_dir+'/info_train.log')
+        logger.info('\n NOW TRAINING WITH FOLLOWING PARAMETERS:'
+                    '\n %s' % (json.dumps(args,indent=4)))
+        loader = DataLoader(data_args,logger)
+        try:
+            handler = Process_Handler(loader, logger, model_args, train_args)
+            for _ in range(train_args['epochs']):
+                start_time = time.time()
+                handler.train()
+                val_mae = handler.val()
+                model_file = model_dir+'/model_%s_epoch_%d_val_mae_%.4f' % (model_args['model_name'],_,val_mae)
+                end_time = time.time()
+                logger.info('Epoch [{}/{}] val_mae: {:.4f}, using time {:.1f}s'.format(
+                    _+1, train_args['epochs'], val_mae, (end_time - start_time)))
+                if val_mae < max_val:
+                    best_model_file=model_dir+'/current_best_%s_epoch_%d_val_mae_%.4f' % (model_args['model_name'],_,val_mae)
+                    dir_args['best_model_dir']=best_model_file
+                    with open(model_dir + '/config_test.yaml', 'w') as f:
+                        yaml.dump(args, f)
+                    handler.save(best_model_file)
+                    max_val = val_mae
+                if (_+1) % 5 == 0:
+                    MAE, RMSE = handler.test()
+                    for i, each in enumerate(MAE):
+                        logger.info(
+                            "Horizon {:02d}, MAE: {:.2f}, RMSE: {:.2f}".format(
+                                i + 1, MAE[i], RMSE[i])
+                        )
+        except:
+            logger.error('\n'+traceback.format_exc())
+
+    if status=='Test':
+        logger = logging_module_init(dir_args['model_dir']+'/info_test.log')
+        loader = DataLoader(data_args,logger)
+        logger.info('\n NOW TESTING WITH MODELS TRAINING BY FOLLOWING PARAMETERS:'
+                    '\n %s' % (json.dumps(args,indent=4)))
+        handler = Process_Handler(loader, logger, model_args, train_args)
+        best_model_file=dir_args['best_model_dir']
+        handler.load(best_model_file)
+        MAE, RMSE = handler.test()
+        for i, each in enumerate(MAE):
+            logger.info(
                 "Horizon {:02d}, MAE: {:.2f}, RMSE: {:.2f}".format(
                     i + 1, MAE[i], RMSE[i])
-                )
-
-    handler.load()
-    MAE,RMSE=handler.test()
-    pass
+            )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default='./config_remote.yaml')
+    parser.add_argument('--config', default='./config_remote_train_DCRNN.yaml')
+    parser.add_argument('--status', default='Train')
     args = parser.parse_args()
-    with open(args.config,'r') as f:
-        args=yaml.load(f)
-    main(args)
+    status=args.status
+    with open(args.config, 'r') as f:
+        model_args = yaml.load(f)
+    main(model_args,status)

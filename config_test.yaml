@@ -1,0 +1,28 @@
+data:
+  adj_mx_dir: ../Datasets/METR-LA/adj_mx_la.pkl
+  data_dir: ../Datasets/METR-LA/metr-la.h5
+  horizon: 12
+  seq_len: 12
+  test_ratio: 0.1
+  train_ratio: 0.8
+  val_ratio: 0.1
+dir:
+  base_dir: ./model
+  best_model_dir: ./model/model_DCRNN_2021-01-06 20:39:21.348754+08:00/current_best_DCRNN_epoch_33_val_mae_5.4447
+  model_dir: ./model/model_DCRNN_2021-01-06 20:39:21.348754+08:00
+model:
+  model_details:
+    hidden_dim: 64
+    input_dim: 2
+    num_layers: 2
+    order: 2
+    output_dim: 1
+  model_name: DCRNN
+  scheduled_sampling: true
+train:
+  batch_size: 64
+  epochs: 100
+  learning_rate: 0.001
+  loss_fn: masked MAELoss
+  optimizer: Adam
+  weight_decay: 0.01
