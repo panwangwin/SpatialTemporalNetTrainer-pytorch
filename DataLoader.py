@@ -147,6 +147,11 @@ class DataLoader():
 
         return iterator()
 
+    def current_stage_iter(self,batch_size):
+        data = self.scaled_data[self.stage]
+        length = len(data['x'])
+        batches = length // batch_size
+
     def calculate_normalized_laplacian(self, adj):
         """
         A must be symmetric matrix

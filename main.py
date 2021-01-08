@@ -26,6 +26,10 @@ import DCRNNModel
 import utils
 from DataLoader import DataLoader
 
+def DCRNN_teaching_force_calculater(i,tao):
+    return tao/(tao+np.exp(i/tao))
+
+
 
 # Logging unit init
 def logging_module_init(logger_dir):
@@ -58,25 +62,28 @@ class Process_Handler():
         use_cuda = torch.cuda.is_available()
         if use_cuda:
             logger.info('Using GPU...')
-        self.train_args = train_args
+        else:
+            logger.info('Using CPU...')
         self.dev = ('cuda' if use_cuda else 'cpu')
         self.loader = loader
         self.logger = logger
+        self.model = self.set_model(model_args['model_name'])
+        self.model = self.model.to(self.dev)
         self.det=model_args['model_details']
+        if 'scheduled_sampling' in model_args:
+            self.schedule_sampling = True
+        else:
+            self.schedule_sampling = False
+        self.train_args = train_args
         self.batch_size = train_args['batch_size']
         self.lr = train_args['learning_rate']
         self.loss_fn = self.set_loss(train_args['loss_fn'])
-        self.model = self.set_model(model_args['model_name'])
-        self.model = self.model.to(self.dev)
         self.set_optimizer(train_args['optimizer'])
         if train_args['lr_scheduler']:
             self.lr_scheduler=torch.optim.lr_scheduler.MultiStepLR(optimizer=self.optimizer,
                                                         milestones=train_args['lr_milestones'],
                                                         gamma=train_args['lr_decay_rate'])
-        if 'scheduled_sampling' in model_args:
-            self.schedule_sampling = True
-        else:
-            self.schedule_sampling = False
+        self.train_epochs=0
 
     def set_optimizer(self, optimizer):
         if optimizer == 'SGD':
@@ -120,6 +127,7 @@ class Process_Handler():
         self.model.train()
         self.loader.set('train')
         self.logger.info('Training...')
+        per_iter = self.loader.current_stage_iter(self.batch_size)
         for i, (x, y) in enumerate(self.loader.get(self.batch_size)):
             self.optimizer.zero_grad()
             x = torch.from_numpy(x).float()
@@ -127,7 +135,8 @@ class Process_Handler():
             x = x.to(self.dev)
             y = y.to(self.dev)
             if self.schedule_sampling==True:
-                pred=self.model(x,y)
+                tf=DCRNN_teaching_force_calculater(self.train_epochs*per_iter+i,self.train_args['teaching_tao'])
+                pred=self.model(x,y,tf)
             else:
                 pred = self.model(x)
             loss = self.loss_fn(pred, y)
@@ -136,6 +145,7 @@ class Process_Handler():
         if self.train_args['lr_scheduler']:
             self.lr_scheduler.step()
         self.logger.info('Training for current epoch Finished!')
+        self.train_epochs+=1
 
 
     def val(self):

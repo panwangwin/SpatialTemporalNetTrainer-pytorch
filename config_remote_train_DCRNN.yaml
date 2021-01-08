@@ -15,6 +15,7 @@ train:
 model:
   model_name: DCRNN
   scheduled_sampling: True
+  teaching_tao: 3000
   model_details:
     input_dim: 2
     output_dim: 1
