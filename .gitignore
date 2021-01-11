@@ -4,3 +4,4 @@
 *.h5
 *.npz
 model/*
+data/

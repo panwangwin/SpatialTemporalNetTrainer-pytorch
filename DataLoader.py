@@ -26,14 +26,18 @@ class DataLoader():
         train_ratio = args['train_ratio']
         test_ratio = args['test_ratio']
         val_ratio = args['val_ratio']
+        train_len=int(train_ratio * df_length)
+        test_len=int(test_ratio * df_length)
+        val_len=int (val_ratio * df_length)
         self.logger = logger
         self.seq_len = args['seq_len']
         self.horizon = args['horizon']
         assert (train_ratio + val_ratio + test_ratio == 1)
 
-        df_set = {'train': df[:int(train_ratio * df_length)],
-                  'val': df[int(train_ratio * df_length):int((train_ratio + val_ratio) * df_length)],
-                  'test': df[-int(test_ratio * df_length):]}
+        df_set = {'train': df[:train_len],
+                  'val': df[train_len:train_len+val_len],
+                  'test': df[-test_len:]}
+
 
         # Construct Graph
         graph = self.mat_to_nx(self.adj_mx)
@@ -56,6 +60,10 @@ class DataLoader():
         self.std = self.data['train']['x'][..., 0].std()
         self.mean = self.data['train']['x'][..., 0].mean()
         self.scaled_data = self.rescale_data()
+        self.logger.info('\n Train set shape: x '+str(self.data['train']['x'].shape)+' y '+str(self.data['train']['y'].shape)+
+                         '\n Val set shape: x '+str(self.data['val']['x'].shape)+' y '+str(self.data['val']['y'].shape)+
+                         '\n Test set shape: x '+str(self.data['test']['x'].shape)+' y '+str(self.data['test']['y'].shape))
+
 
     def rescale_data(self):
         scaled_data = {}
@@ -129,13 +137,17 @@ class DataLoader():
         self.stage = stage
         return stage
 
-    def get(self, batch_size):
+    def get(self, batch_size,shuffle = True):
         '''
         :param batch_size:
         :return: shape:[batch_size,seq_len/horizon,num_nodes,input_dim]
         '''
         self.current_batch = 0
         data = self.scaled_data[self.stage]
+        if shuffle:
+            permute=np.random.permutation(len(data['x']))
+            data['x']=data['x'][permute]
+            data['y']=data['y'][permute]
         length = len(data['x'])
         batches = length / batch_size
 
@@ -151,6 +163,7 @@ class DataLoader():
         data = self.scaled_data[self.stage]
         length = len(data['x'])
         batches = length // batch_size
+        return batches
 
     def calculate_normalized_laplacian(self, adj):
         """

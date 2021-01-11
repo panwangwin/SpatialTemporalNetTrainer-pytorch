@@ -10,25 +10,25 @@ train:
   epochs: 100
   loss_fn: masked MAELoss
   optimizer: Adam
-  weight_decay: 0.01
+  weight_decay: 0
 
 model:
   model_name: DCRNN
   scheduled_sampling: True
-  teaching_tao: 3000
   model_details:
     input_dim: 2
     output_dim: 1
     hidden_dim: 64
     num_layers: 2
     order: 2
+    teaching_tao: 2000
 
 
 data:
   data_dir: ../Datasets/METR-LA/metr-la.h5
   adj_mx_dir: ../Datasets/METR-LA/adj_mx_la.pkl
-  train_ratio: 0.8
-  test_ratio: 0.1
+  train_ratio: 0.7
+  test_ratio: 0.2
   val_ratio: 0.1
   seq_len: 12
   horizon: 12

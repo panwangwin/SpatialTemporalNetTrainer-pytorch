@@ -10,7 +10,7 @@ train:
   epochs: 100
   loss_fn: masked MAELoss
   optimizer: Adam
-  weight_decay: 0.01
+  weight_decay: 0
 
 model:
   model_name: S2SGRU

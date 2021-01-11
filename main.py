@@ -24,12 +24,12 @@ import json
 import models
 import DCRNNModel
 import utils
+import metrics
 from DataLoader import DataLoader
+from Dataloader2 import *
 
 def DCRNN_teaching_force_calculater(i,tao):
     return tao/(tao+np.exp(i/tao))
-
-
 
 # Logging unit init
 def logging_module_init(logger_dir):
@@ -65,11 +65,16 @@ class Process_Handler():
         else:
             logger.info('Using CPU...')
         self.dev = ('cuda' if use_cuda else 'cpu')
-        self.loader = loader
+        #############
+        #self.loader = loader
+        #new dataloader version
+        self.origin_loader=loader
+        self.scaler=loader['scaler']
+        #############
         self.logger = logger
+        self.det=model_args['model_details']
         self.model = self.set_model(model_args['model_name'])
         self.model = self.model.to(self.dev)
-        self.det=model_args['model_details']
         if 'scheduled_sampling' in model_args:
             self.schedule_sampling = True
         else:
@@ -84,13 +89,17 @@ class Process_Handler():
                                                         milestones=train_args['lr_milestones'],
                                                         gamma=train_args['lr_decay_rate'])
         self.train_epochs=0
+        self.batch_logger_time=20
+        self.max_grad_norm=5
 
     def set_optimizer(self, optimizer):
         if optimizer == 'SGD':
             self.optimizer = optim.SGD(self.model.parameters(), lr=self.lr)
         elif optimizer == 'Adam':
             weight_decay = self.train_args['weight_decay']
-            self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=weight_decay)
+
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=weight_decay, amsgrad=True,
+                                        eps=1.0e-3)
         else:
             raise AttributeError('No such optimizer')
 
@@ -102,10 +111,17 @@ class Process_Handler():
             return models.S2SGRU(self.det['input_dim'],self.det['output_dim'],self.loader.seq_len,self.loader.horizon,
                               self.loader.num_nodes,self.det['hidden_dim'],self.det['num_layers'])
         elif model_name == 'DCRNN':
-            self.graph=[self.loader.laplacian]
-            self.graph=[torch.tensor(i).to(self.dev) for i in self.graph]
-            return DCRNNModel.DCRNNModel(self.det['input_dim'],self.det['output_dim'],self.loader.seq_len,self.loader.horizon,
-                              self.loader.num_nodes,self.det['hidden_dim'],self.det['num_layers'],self.graph, self.det['order'])
+            ###########
+            # self.graph=[self.loader.laplacian]
+            # self.graph=[torch.tensor(i).to(self.dev) for i in self.graph]
+            #new dataloader version
+            adj_mat = load_graph()
+            supports = [calculate_scaled_laplacian(adj_mat, lambda_max=None)]
+            supports = [torch.tensor(i).to(self.dev) for i in supports]
+            self.graph=supports
+            ###########
+            return DCRNNModel.DCRNNModel(self.det['input_dim'],self.det['output_dim'],12,12,
+                              207,self.det['hidden_dim'],self.det['num_layers'],self.graph, self.det['order'])
         else:
             raise AttributeError('No Such Model!')
 
@@ -115,37 +131,54 @@ class Process_Handler():
         elif loss_name == 'L1Loss':
             return nn.L1Loss()
         elif loss_name == 'masked MSELoss':
-            return utils.masked_mse_torch(null_val=0)
+            return utils.masked_mse_torch(null_val=0.0)
         elif loss_name == 'masked MAELoss':
-            return utils.masked_mae_torch(null_val=0)
+            return utils.masked_mae_torch(null_val=0.0)
         elif loss_name == 'masked RMSELoss':
-            return utils.masked_rmse_torch(null_val=0)
+            return utils.masked_rmse_torch(null_val=0.0)
         else:
             raise AttributeError('No Such Loss!')
 
     def train(self):
         self.model.train()
-        self.loader.set('train')
+        ##############
+        # self.loader.set('train')
+        # new dataloader version
+        self.loader=self.origin_loader['train_loader']
+        ##############
         self.logger.info('Training...')
-        per_iter = self.loader.current_stage_iter(self.batch_size)
-        for i, (x, y) in enumerate(self.loader.get(self.batch_size)):
+        total_loss=0
+        per_iter = 375
+        ##############
+        #for i, (x, y) in enumerate(self.loader.get(self.batch_size)):
+        for i, (x, y) in enumerate(self.loader):
+        ##############
+            label = y[..., :self.model.output_dim]  # (..., 1)
+
             self.optimizer.zero_grad()
-            x = torch.from_numpy(x).float()
-            y = torch.from_numpy(y).float()
-            x = x.to(self.dev)
-            y = y.to(self.dev)
+            # x = torch.from_numpy(x).float()
+            # y = torch.from_numpy(y).float()
+            # x = x.to(self.dev)
+            # y = y.to(self.dev)
             if self.schedule_sampling==True:
-                tf=DCRNN_teaching_force_calculater(self.train_epochs*per_iter+i,self.train_args['teaching_tao'])
-                pred=self.model(x,y,tf)
+                tf=DCRNN_teaching_force_calculater(self.train_epochs*per_iter+i,self.det['teaching_tao'])
+                pred=self.model(x,label,tf)
             else:
                 pred = self.model(x)
-            loss = self.loss_fn(pred, y)
+            #loss = self.loss_fn(self.loader.inverse_scale_data(pred), self.loader.inverse_scale_data(label))
+            loss = self.loss_fn(self.scaler.inverse_transform(pred), self.scaler.inverse_transform(label))
             loss.backward()
+            total_loss+=loss.item()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
             self.optimizer.step()
+            if (i+1) % self.batch_logger_time==0:
+                self.logger.info('Train Epoch {}: {}/{} Loss: {:.3f}'.format(
+                    self.train_epochs, i+1, per_iter, loss))
         if self.train_args['lr_scheduler']:
             self.lr_scheduler.step()
         self.logger.info('Training for current epoch Finished!')
         self.train_epochs+=1
+        return total_loss/per_iter
 
 
     def val(self):
@@ -154,25 +187,37 @@ class Process_Handler():
         """
         self.logger.info('Validating')
         self.model.eval()
-        self.loader.set('val')
+        ##############
+        # self.loader.set('val')
+        # new dataloader version
+        self.loader=self.origin_loader['val_loader']
+        ##############
+
         total_pred = []
         total_y = []
-        for i, (x, y) in enumerate(self.loader.get(self.batch_size)):
-            x = torch.from_numpy(x).float()
-            x = x.to(self.dev)
-            if self.schedule_sampling==True:
-                y = torch.from_numpy(y).float()
-                y = y.to(self.dev)
-                pred=self.model(x,y,teaching_force=0)
-                y = y.cpu().detach().numpy()
-            else:
-                pred = self.model(x)
-            total_y.append(self.loader.inverse_scale_data(y))
-            pred = self.loader.inverse_scale_data(pred)
-            total_pred.append(pred.cpu().detach().numpy())
-        pred = np.concatenate(total_pred, axis=0)
-        y = np.concatenate(total_y, axis=0)
-        return utils.masked_mae_np(pred, y, null_val=0)
+        total_loss=[]
+        with torch.no_grad():
+            ###############
+            #for i, (x, y) in enumerate(self.loader.get(self.batch_size,shuffle=False)):
+            for i, (x, y) in enumerate(self.loader):
+            ###############
+                # x = torch.from_numpy(x).float()
+                # x = x.to(self.dev)
+                if self.schedule_sampling==True:
+                    # y = torch.from_numpy(y).float()
+                    # y = y.to(self.dev)
+                    pred=self.model(x,y,teaching_force=0)
+                    y = y.cpu().detach().numpy()
+                else:
+                    pred = self.model(x)
+                #y=self.loader.inverse_scale_data(y)
+                total_y.append(y)
+                #pred = self.loader.inverse_scale_data(pred)
+                total_pred.append(pred.cpu().detach().numpy())
+                total_loss.append(utils.masked_mae_np(pred.cpu().detach().numpy(),y,null_val=0.0))
+            pred = np.concatenate(total_pred, axis=0)
+            y = np.concatenate(total_y, axis=0)
+        return utils.masked_mae_np(pred, y, null_val=0.0), np.mean(total_loss)
 
     def test(self):
         """
@@ -183,28 +228,29 @@ class Process_Handler():
         self.loader.set('test')
         total_pred = []
         total_y = []
-        for i, (x, y) in enumerate(self.loader.get(self.batch_size)):
-            x = torch.from_numpy(x).float()
-            x = x.to(self.dev)
-            if self.schedule_sampling==True:
-                y = torch.from_numpy(y).float()
-                y = y.to(self.dev)
-                pred=self.model(x,y,teaching_force=0)
-                y = y.cpu().detach().numpy()
-            else:
-                pred = self.model(x)
-            total_y.append(self.loader.inverse_scale_data(y))
-            pred = self.loader.inverse_scale_data(pred)
-            total_pred.append(pred.cpu().detach().numpy())
-        pred = np.concatenate(total_pred, axis=0)
-        y = np.concatenate(total_y, axis=0)
-        horizon_MAE = []
-        horizon_RMSE = []
-        for horizon in range(pred.shape[1]):
-            pred_i = pred[:, horizon, :, :]
-            y_i = y[:, horizon, :, :]
-            horizon_MAE.append(utils.masked_mae_np(pred_i, y_i, null_val=0))
-            horizon_RMSE.append(utils.masked_rmse_np(pred_i, y_i, null_val=0))
+        with torch.no_grad():
+            for i, (x, y) in enumerate(self.loader.get(self.batch_size,shuffle=False)):
+                x = torch.from_numpy(x).float()
+                x = x.to(self.dev)
+                if self.schedule_sampling==True:
+                    y = torch.from_numpy(y).float()
+                    y = y.to(self.dev)
+                    pred=self.model(x,y,teaching_force=0)
+                    y = y.cpu().detach().numpy()
+                else:
+                    pred = self.model(x)
+                total_y.append(self.loader.inverse_scale_data(y))
+                pred = self.loader.inverse_scale_data(pred)
+                total_pred.append(pred.cpu().detach().numpy())
+            pred = np.concatenate(total_pred, axis=0)
+            y = np.concatenate(total_y, axis=0)
+            horizon_MAE = []
+            horizon_RMSE = []
+            for horizon in range(pred.shape[1]):
+                pred_i = pred[:, horizon, :, :]
+                y_i = y[:, horizon, :, :]
+                horizon_MAE.append(utils.masked_mae_np(pred_i, y_i, null_val=0.0))
+                horizon_RMSE.append(utils.masked_rmse_np(pred_i, y_i, null_val=0.0))
         return horizon_MAE, horizon_RMSE
 
     def save(self, filename):
@@ -234,19 +280,21 @@ def main(args,status):
         logger = logging_module_init(model_dir+'/info_train.log')
         logger.info('\n NOW TRAINING WITH FOLLOWING PARAMETERS:'
                     '\n %s' % (json.dumps(args,indent=4)))
-        loader = DataLoader(data_args,logger)
+        # loader = DataLoader(data_args,logger)
+        loader=load_data(64)
         try:
             handler = Process_Handler(loader, logger, model_args, train_args)
             for _ in range(train_args['epochs']):
                 start_time = time.time()
-                handler.train()
-                val_mae = handler.val()
-                model_file = model_dir+'/model_%s_epoch_%d_val_mae_%.4f' % (model_args['model_name'],_,val_mae)
+                train_loss=handler.train()
+                logger.info('Current epoch train loss %.4f'%train_loss)
+                val_mae, mean_val_mae = handler.val()
+                model_file = model_dir+'/model_%s_epoch_%d_val_mae_%.4f' % (model_args['model_name'],_+1,val_mae)
                 end_time = time.time()
-                logger.info('Epoch [{}/{}] val_mae: {:.4f}, using time {:.1f}s'.format(
-                    _+1, train_args['epochs'], val_mae, (end_time - start_time)))
+                logger.info('Epoch [{}/{}] val_mae: {:.4f}, mean_val_mae: {:.4f} using time {:.1f}s'.format(
+                    _+1, train_args['epochs'], val_mae, mean_val_mae, (end_time - start_time)))
                 if val_mae < max_val:
-                    best_model_file=model_dir+'/current_best_%s_epoch_%d_val_mae_%.4f' % (model_args['model_name'],_,val_mae)
+                    best_model_file=model_dir+'/current_best_%s_epoch_%d_val_mae_%.4f' % (model_args['model_name'],_+1,val_mae)
                     dir_args['best_model_dir']=best_model_file
                     with open(model_dir + '/config_test.yaml', 'w') as f:
                         yaml.dump(args, f)
