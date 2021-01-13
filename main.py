@@ -243,7 +243,6 @@ def main(args, status):
         logger.info('\n NOW TRAINING WITH FOLLOWING PARAMETERS:'
                     '\n %s' % (json.dumps(args, indent=4)))
         loader = DataLoader(data_args, logger)
-        # loader=load_data(64)
         try:
             handler = Process_Handler(loader, logger, model_args, train_args)
             for _ in range(train_args['epochs']):

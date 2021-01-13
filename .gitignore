@@ -5,3 +5,6 @@
 *.npz
 model/*
 data/
+AGCN.py
+AGCRN.py
+AGCRNCell.py
