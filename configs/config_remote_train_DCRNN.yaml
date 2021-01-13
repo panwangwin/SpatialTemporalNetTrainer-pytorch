@@ -7,6 +7,7 @@ train:
   lr_scheduler: True
   lr_decay_rate: 0.1
   lr_milestones: [20,30,40,50]
+  max_grad_norm: 5
   epochs: 100
   loss_fn: masked MAELoss
   optimizer: Adam

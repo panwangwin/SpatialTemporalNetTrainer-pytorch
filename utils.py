@@ -3,7 +3,7 @@
 # Filename:utils.py
 # Author:Wang Pan
 # Purpose:
-
+import pickle
 import torch
 import numpy as np
 
@@ -112,3 +112,10 @@ def masked_mape_np(preds, labels, null_val=np.nan):
         mape = np.nan_to_num(mask * mape)
         return np.mean(mape)
 
+
+def pickle_save(filename, object):
+    with open(filename, 'wb') as f:
+        pickle.dump(object, f)
+
+def DCRNN_teaching_force_calculater(i,tao):
+    return tao/(tao+np.exp(i/tao))

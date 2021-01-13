@@ -4,6 +4,7 @@
 # Author:Wang Pan
 # Purpose:
 import copy
+import os
 import pickle
 
 import networkx as nx
@@ -15,29 +16,26 @@ from scipy.sparse import linalg
 
 
 class DataLoader():
-    def __init__(self, args, logger):
+    def __init__(self, args, logger, save=False):
         # initialization
+        self.logger = logger
+        self.seq_len = args['seq_len']
+        self.horizon = args['horizon']
         data_dir = args['data_dir']
         df = pd.read_hdf(data_dir)
-        df_length = len(df)
         adj_mx_dir = args['adj_mx_dir']
         with open(adj_mx_dir, 'rb') as f:
             self.adj_mx = pickle.load(f, encoding='latin1')[2]
         train_ratio = args['train_ratio']
         test_ratio = args['test_ratio']
-        val_ratio = args['val_ratio']
-        train_len=int(train_ratio * df_length)
-        test_len=int(test_ratio * df_length)
-        val_len=int (val_ratio * df_length)
-        self.logger = logger
-        self.seq_len = args['seq_len']
-        self.horizon = args['horizon']
-        assert (train_ratio + val_ratio + test_ratio == 1)
+        sequences = {}
+        sequences['x'], sequences['y'] = self.construct_x_y(df)
+        sequences_nums = sequences['x'].shape[0]
+        train_len = round(sequences_nums * train_ratio)
+        test_len = round(sequences_nums * test_ratio)
+        val_len = sequences_nums - train_len - test_len
 
-        df_set = {'train': df[:train_len],
-                  'val': df[train_len:train_len+val_len],
-                  'test': df[-test_len:]}
-
+        stage_length = {'train': train_len, 'val': val_len, 'test': test_len}
 
         # Construct Graph
         graph = self.mat_to_nx(self.adj_mx)
@@ -49,21 +47,41 @@ class DataLoader():
                          '\nForecasting horizon: %d'
                          % (n, m, self.seq_len, self.horizon))
         self.graph = graph
-        self.laplacian = self.calculate_scaled_laplacian(self.adj_mx)
+        self.laplacian = self.calculate_scaled_laplacian(self.adj_mx, lambda_max=None)
         self.data = {}
-        for each in df_set:
+        split_flag = 0
+        for each in stage_length:
             xy = {}
-            xy['x'], xy['y'] = self.construct_x_y(df_set[each])
-            xy['y'] = xy['y'][..., [0]]
+            xy['x'] = sequences['x'][split_flag:split_flag + stage_length[each]]
+            xy['y'] = sequences['y'][split_flag:split_flag + stage_length[each]]
+            xy['y'] = xy['y'][..., :1]
+            split_flag += stage_length[each]
             self.data[each] = xy
+            if save:
+                x_offsets = np.sort(
+                    # np.concatenate(([-week_size + 1, -day_size + 1], np.arange(-11, 1, 1)))
+                    np.concatenate((np.arange(-11, 1, 1),))
+                )
+                # Predict the next one hour
+                y_offsets = np.sort(np.arange(1, 13, 1))
+                _x, _y = xy["x"], xy["y"]
+                print(each, "x: ", _x.shape, "y:", _y.shape)
+                np.savez_compressed(
+                    os.path.join('./data/MetrLA/new_processed', "%s.npz" % each),
+                    x=_x,
+                    y=_y,
+                    x_offsets=x_offsets.reshape(list(x_offsets.shape) + [1]),
+                    y_offsets=y_offsets.reshape(list(y_offsets.shape) + [1]),
+                )
+
         self.stage = None
         self.std = self.data['train']['x'][..., 0].std()
         self.mean = self.data['train']['x'][..., 0].mean()
         self.scaled_data = self.rescale_data()
-        self.logger.info('\n Train set shape: x '+str(self.data['train']['x'].shape)+' y '+str(self.data['train']['y'].shape)+
-                         '\n Val set shape: x '+str(self.data['val']['x'].shape)+' y '+str(self.data['val']['y'].shape)+
-                         '\n Test set shape: x '+str(self.data['test']['x'].shape)+' y '+str(self.data['test']['y'].shape))
-
+        self.logger.info(
+            '\n Train set shape: x ' + str(self.data['train']['x'].shape) + ' y ' + str(self.data['train']['y'].shape) +
+            '\n Val set shape: x ' + str(self.data['val']['x'].shape) + ' y ' + str(self.data['val']['y'].shape) +
+            '\n Test set shape: x ' + str(self.data['test']['x'].shape) + ' y ' + str(self.data['test']['y'].shape))
 
     def rescale_data(self):
         scaled_data = {}
@@ -137,7 +155,7 @@ class DataLoader():
         self.stage = stage
         return stage
 
-    def get(self, batch_size,shuffle = True):
+    def get(self, batch_size, shuffle=True):
         '''
         :param batch_size:
         :return: shape:[batch_size,seq_len/horizon,num_nodes,input_dim]
@@ -145,9 +163,9 @@ class DataLoader():
         self.current_batch = 0
         data = self.scaled_data[self.stage]
         if shuffle:
-            permute=np.random.permutation(len(data['x']))
-            data['x']=data['x'][permute]
-            data['y']=data['y'][permute]
+            permute = np.random.permutation(len(data['x']))
+            data['x'] = data['x'][permute]
+            data['y'] = data['y'][permute]
         length = len(data['x'])
         batches = length / batch_size
 
@@ -159,7 +177,7 @@ class DataLoader():
 
         return iterator()
 
-    def current_stage_iter(self,batch_size):
+    def current_stage_iter(self, batch_size):
         data = self.scaled_data[self.stage]
         length = len(data['x'])
         batches = length // batch_size
